@@ -88,4 +88,49 @@ router.get('/showPets', async (req, res) => {
 	}
 });
 
+router.post('/addUser', async (req, res) => {
+    console.log("Attempting to add user");
+
+    const userSchema = Joi.object({
+        first_name: Joi.string().min(1).max(30).required(),
+        last_name: Joi.string().min(1).max(30).required(),
+        email: Joi.string().email().required(),
+        password: Joi.string().min(6).required()
+    });
+
+    const { value, error } = userSchema.validate(req.body);
+    if (error) {
+        console.log("Validation error:", error);
+        return res.render('error', { message: 'Validation failed for user data' });
+    }
+
+    try {
+        const existingUser = await User.findOne({ email: value.email }).exec();
+        if (existingUser) {
+            console.log("User with this email already exists");
+            return res.render('error', { message: 'User with this email already exists' });
+        }
+
+
+        const hashedPassword = await User.hashPassword(value.password);
+
+      
+        const newUser = new User({
+            first_name: value.first_name,
+            last_name: value.last_name,
+            email: value.email,
+            password_hash: hashedPassword, 
+        });
+
+        await newUser.save();
+        console.log("New user added successfully");
+
+        res.redirect('/');
+    } catch (ex) {
+        console.log("Error adding user:", ex);
+        res.render('error', { message: 'Error adding new user' });
+    }
+});
+
+
 module.exports = router;
