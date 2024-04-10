@@ -89,47 +89,35 @@ router.get('/showPets', async (req, res) => {
 });
 
 router.post('/addUser', async (req, res) => {
-    console.log("Attempting to add user");
+	try {
+		console.log("form submit");
+		const validationResult = schema.validate(req.query.id);
+		if (validationResult.error != null) {
+		console.log(validationResult.error);
+		throw validationResult.error;
+		}
+		// Create password salt and hash
+		const password_salt = crypto.createHash('sha512').update(uuid()).digest('hex');
+		const password_hash = crypto.createHash('sha512').update(req.body.password + passwordPepper + password_salt).digest('hex');
 
-    const userSchema = Joi.object({
-        first_name: Joi.string().min(1).max(30).required(),
-        last_name: Joi.string().min(1).max(30).required(),
-        email: Joi.string().email().required(),
-        password: Joi.string().min(6).required()
-    });
+		// Create a new user object
+		let newUser = {
+			first_name: req.body.first_name,
+			last_name: req.body.last_name,
+			email: req.body.email,
+			password_salt: password_salt,
+			password_hash: password_hash
+		};
 
-    const { value, error } = userSchema.validate(req.body);
-    if (error) {
-        console.log("Validation error:", error);
-        return res.render('error', { message: 'Validation failed for user data' });
-    }
-
-    try {
-        const existingUser = await User.findOne({ email: value.email }).exec();
-        if (existingUser) {
-            console.log("User with this email already exists");
-            return res.render('error', { message: 'User with this email already exists' });
-        }
-
-
-        const hashedPassword = await User.hashPassword(value.password);
-
-      
-        const newUser = new User({
-            first_name: value.first_name,
-            last_name: value.last_name,
-            email: value.email,
-            password_hash: hashedPassword, 
-        });
-
-        await newUser.save();
-        console.log("New user added successfully");
-
-        res.redirect('/');
-    } catch (ex) {
-        console.log("Error adding user:", ex);
-        res.render('error', { message: 'Error adding new user' });
-    }
+		// Insert the new user into the MongoDB collection
+		const result = await database.db('lab_example').collection('users').insertOne(newUser);
+		console.log("addUser result: ", result);
+		res.redirect("/");
+	}
+	catch (ex) {
+		console.log("Error connecting to MongoDB", ex);
+		res.render('error', { message: 'Error connecting to MongoDB' });
+	}
 });
 
 
