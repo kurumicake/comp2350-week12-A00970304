@@ -3,6 +3,7 @@ const database = include('databaseConnection');
 const User = include('models/user');
 const Pet = include('models/pet');
 const Joi = require("joi");
+const crypto = require('crypto');
 
 router.get('/', async (req, res) => {
 	console.log("page hit");
@@ -89,35 +90,44 @@ router.get('/showPets', async (req, res) => {
 });
 
 router.post('/addUser', async (req, res) => {
-	try {
-		console.log("form submit");
-		const validationResult = schema.validate(req.query.id);
-		if (validationResult.error != null) {
-		console.log(validationResult.error);
-		throw validationResult.error;
-		}
-		// Create password salt and hash
-		const password_salt = crypto.createHash('sha512').update(uuid()).digest('hex');
-		const password_hash = crypto.createHash('sha512').update(req.body.password + passwordPepper + password_salt).digest('hex');
+    try {
+        console.log("form submit");
 
-		// Create a new user object
-		let newUser = {
-			first_name: req.body.first_name,
-			last_name: req.body.last_name,
-			email: req.body.email,
-			password_salt: password_salt,
-			password_hash: password_hash
-		};
+        const userSchema = Joi.object({
+            first_name: Joi.string().required(),
+            last_name: Joi.string().required(),
+            email: Joi.string().email().required(),
+            password: Joi.string().required(),
+        });
 
-		// Insert the new user into the MongoDB collection
-		const result = await database.db('lab_example').collection('users').insertOne(newUser);
-		console.log("addUser result: ", result);
-		res.redirect("/");
-	}
-	catch (ex) {
-		console.log("Error connecting to MongoDB", ex);
-		res.render('error', { message: 'Error connecting to MongoDB' });
-	}
+        const validationResult = userSchema.validate(req.body);
+        if (validationResult.error != null) {
+            console.log(validationResult.error);
+            return res.render('error', { message: 'Validation failed' });
+        }
+
+        const { first_name, last_name, email, password } = validationResult.value;
+  
+        const password_salt = crypto.createHash('sha512').update(crypto.randomBytes(16).toString()).digest('hex');
+        const password_hash = crypto.createHash('sha512').update(password + password_salt).digest('hex'); // 
+
+        const newUser = new User({
+            first_name,
+            last_name,
+            email,
+            password_salt,
+            password_hash,
+           
+        });
+
+        const result = await newUser.save();
+        console.log("addUser result: ", result);
+
+        res.redirect("/");
+    } catch (ex) {
+        console.log("Error processing addUser:", ex);
+        res.render('error', { message: 'Error adding new user' });
+    }
 });
 
 
